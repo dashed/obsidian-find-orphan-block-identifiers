@@ -5,10 +5,14 @@ import {
     Plugin,
     PluginSettingTab,
     Setting,
+    Vault,
+    TFile,
+    MetadataCache,
+    parseFrontMatterAliases,
 } from "obsidian";
 import { createRoot, Root } from "react-dom/client";
 import * as React from "react";
-import { useContext } from "react";
+import { useContext, useEffect } from "react";
 
 interface MyPluginSettings {
     mySetting: string;
@@ -71,13 +75,72 @@ const useApp = (): App | undefined => {
     return useContext(AppContext);
 };
 
+class JsNote {
+    title: string;
+    path: string;
+    content: string;
+    aliases: string[];
+
+    constructor(
+        title: string,
+        path: string,
+        content: string,
+        aliases: string[] = []
+    ) {
+        this.title = title;
+        this.path = path;
+        this.content = content;
+        this.aliases = aliases;
+    }
+
+    static async fromFile(
+        file: TFile,
+        vault: Vault,
+        cache: MetadataCache
+    ): Promise<JsNote> {
+        const name = file.basename;
+        const path = file.path;
+        const content = await vault.cachedRead(file);
+        const fileCache = cache.getFileCache(file);
+        const aliases = fileCache
+            ? parseFrontMatterAliases(fileCache.frontmatter) ?? []
+            : [];
+        const jsNote = new JsNote(name, path, content, aliases);
+        // console.log("name", name);
+        return jsNote;
+    }
+}
+
+async function getNotesFromVault(
+    vault: Vault,
+    cache: MetadataCache
+): Promise<JsNote[]> {
+    const notes = vault.getMarkdownFiles().map(async (file, index) => {
+        return await JsNote.fromFile(file, vault, cache);
+    });
+    return await Promise.all(notes);
+}
+
 function FindOrphanBlockIdentifiers() {
     const app = useApp();
     if (!app) {
         return null;
     }
 
-    const { vault } = app;
+    const { vault, metadataCache } = app;
+
+    function showError(error: Error) {
+        console.error(error);
+    }
+
+    useEffect(() => {
+        getNotesFromVault(vault, metadataCache).catch(showError);
+        // JsNote.getNotesFromVault(vault, metadataCache)
+        // 	.then(getLinkFinderResults)
+        // 	.then(showMatchSelection)
+        // 	.catch(showError);
+    }, [app]);
+
     return <h4>Hello, Albert!</h4>;
 }
 
