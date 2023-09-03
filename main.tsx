@@ -161,8 +161,10 @@ async function getNotesFromVault(
 
 function OrphanBlockIdentifiersResult({
     result,
+    onClick,
 }: {
     result: OrphanBlockIdentifier[];
+    onClick: (x: OrphanBlockIdentifier | BrokenLink) => void;
 }) {
     if (result.length <= 0) {
         return null;
@@ -175,10 +177,19 @@ function OrphanBlockIdentifiersResult({
             </div>
             <div>
                 <ol>
-                    {result.map((orphanBlockIdentifier) => {
+                    {result.map((orphanBlockIdentifier, index) => {
                         return (
-                            <li className="fobi-note-matching-result-item">
-                                <a href="#">
+                            <li
+                                className="fobi-note-matching-result-item"
+                                key={`orphan-block-${index}-${orphanBlockIdentifier.sourcePath}`}
+                            >
+                                <a
+                                    href="#"
+                                    onClick={(event) => {
+                                        event.preventDefault();
+                                        onClick(orphanBlockIdentifier);
+                                    }}
+                                >
                                     <code>
                                         <small>
                                             {
@@ -488,51 +499,9 @@ function FindOrphanBlockIdentifiers({
             }
         });
 
-        if (brokenLinks.length > 0) {
-            const foo = brokenLinks[0];
-            console.log("foo", foo);
-            workspace
-                .getLeaf()
-                .openFile(foo.sourceNote.file)
-                .then(() => {
-                    if (
-                        workspace.activeEditor &&
-                        workspace.activeEditor.editor
-                    ) {
-                        // closeModal();
-
-                        const { editor } = workspace.activeEditor;
-                        const editorPositionStart = editor.offsetToPos(
-                            foo.positionStart
-                        );
-                        const editorPositionEnd = editor.offsetToPos(
-                            foo.positionEnd
-                        );
-                        console.log("foo.position", foo.positionStart);
-                        console.log("editorPosition", editorPositionStart);
-                        editor.focus();
-                        // editor.setCursor(editorPositionStart);
-
-                        editor.setSelection(
-                            editorPositionStart,
-                            editorPositionEnd
-                        );
-
-                        console.log("getSelection", editor.getSelection());
-                        // editor.replaceSelection("Sample Editor Command");
-                    }
-                });
-        }
-
         setBrokenLinks(brokenLinks);
         setOrphanBlockIdentifiers(orphanBlockIdentifiers);
         setProcessingState(ProcessingState.Finished);
-
-        // return {
-        //     jsNotes,
-        //     brokenLinks,
-        //     orphanBlockIdentifiers,
-        // };
     }
 
     function showError(error: Error) {
@@ -573,6 +542,36 @@ function FindOrphanBlockIdentifiers({
                             </div>
                             <OrphanBlockIdentifiersResult
                                 result={result.orphanBlockIdentifiers}
+                                onClick={(result) => {
+                                    closeModal();
+
+                                    workspace
+                                        .getLeaf()
+                                        .openFile(result.sourceNote.file)
+                                        .then(() => {
+                                            if (
+                                                workspace.activeEditor &&
+                                                workspace.activeEditor.editor
+                                            ) {
+                                                const { editor } =
+                                                    workspace.activeEditor;
+                                                const editorPositionStart =
+                                                    editor.offsetToPos(
+                                                        result.positionStart
+                                                    );
+                                                const editorPositionEnd =
+                                                    editor.offsetToPos(
+                                                        result.positionEnd
+                                                    );
+
+                                                editor.focus();
+                                                editor.setSelection(
+                                                    editorPositionStart,
+                                                    editorPositionEnd
+                                                );
+                                            }
+                                        });
+                                }}
                             />
                             {result.orphanBlockIdentifiers.length &&
                             result.brokenLinks.length ? (
