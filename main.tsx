@@ -625,10 +625,36 @@ function FindOrphanBlockIdentifiers({
     }
 
     if (processingState == ProcessingState.Initializing) {
-        return <div>🏗️ Retrieving notes...</div>;
+        return (
+            <React.Fragment>
+                <hr />
+                <center>
+                    <div>🏗️ Retrieving notes...</div>
+                </center>
+            </React.Fragment>
+        );
     } else if (processingState == ProcessingState.Scanning) {
-        return <div>🔭 Scanning notes...</div>;
+        return (
+            <React.Fragment>
+                <hr />
+                <center>
+                    <div>🔭 Scanning notes...</div>
+                </center>
+            </React.Fragment>
+        );
     } else if (processingState == ProcessingState.Finished) {
+        if (fileToResults.size <= 0) {
+            return (
+                <React.Fragment>
+                    <hr />
+                    <center>
+                        <div>
+                            🎉 No orphaned block identifiers nor broken links!
+                        </div>
+                    </center>
+                </React.Fragment>
+            );
+        }
         return (
             <div>
                 {[...fileToResults.keys()].map((filePath) => {
