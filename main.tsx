@@ -14,7 +14,6 @@ import {
 import { createRoot, Root } from "react-dom/client";
 import * as React from "react";
 import { useContext, useEffect, useState } from "react";
-import _ from "lodash";
 
 type BrokenLink = {
     sourcePath: string;
@@ -22,26 +21,15 @@ type BrokenLink = {
         path: string;
         subpath: string;
     };
+    position: number;
 };
 
 type OrphanBlockIdentifier = {
     sourcePath: string;
     blockIdentifier: string;
+    position: number;
 };
 
-function beforeLast(value: string, delimiter: string): string {
-    value = value || "";
-
-    if (delimiter === "") {
-        return value;
-    }
-
-    const substrings = value.split(delimiter);
-
-    return substrings.length === 1
-        ? value // delimiter is not part of the string
-        : substrings.slice(0, -1).join(delimiter);
-}
 interface MyPluginSettings {
     mySetting: string;
 }
@@ -173,6 +161,10 @@ function FindOrphanBlockIdentifiers() {
 
         // Get all block identifier references
         const expectedBlockIdentifierLinks = new Set<string>();
+        const expectedBlockIdentifierLinksMap = new Map<
+            string,
+            OrphanBlockIdentifier
+        >();
 
         jsNotes.map((note: JsNote) => {
             const re = new RegExp("\\^([a-zA-Z0-9-]+)$", "gm");
@@ -183,6 +175,16 @@ function FindOrphanBlockIdentifiers() {
 
                     const blockSubpath = `${note.path}#^${blockIdentifier}`;
                     expectedBlockIdentifierLinks.add(blockSubpath);
+
+                    const orphanBlockIdentifier: OrphanBlockIdentifier = {
+                        sourcePath: note.path,
+                        blockIdentifier,
+                        position: result.index ?? 0,
+                    };
+                    expectedBlockIdentifierLinksMap.set(
+                        blockSubpath,
+                        orphanBlockIdentifier
+                    );
                 }
             }
         });
@@ -227,6 +229,7 @@ function FindOrphanBlockIdentifiers() {
                                         path: maybeFile.path,
                                         subpath: parseLinktextResult.subpath,
                                     },
+                                    position: result.index ?? 0,
                                 };
                                 brokenLinks.push(brokenLink);
                             } else {
@@ -265,6 +268,7 @@ function FindOrphanBlockIdentifiers() {
                                 path: parseLinktextResult.path,
                                 subpath: parseLinktextResult.subpath,
                             },
+                            position: result.index ?? 0,
                         };
                         brokenLinks.push(brokenLink);
                     }
@@ -275,14 +279,12 @@ function FindOrphanBlockIdentifiers() {
         const orphanBlockIdentifiers: Array<OrphanBlockIdentifier> = [];
 
         for (const orphanBlockIdentifierLink of expectedBlockIdentifierLinks) {
-            const sourcePath = beforeLast(orphanBlockIdentifierLink, "#^");
-            const result = orphanBlockIdentifierLink.split("#^");
-            const blockIdentifier = result[result.length - 1];
-            const orphanBlockIdentifier = {
-                sourcePath,
-                blockIdentifier,
-            };
-            orphanBlockIdentifiers.push(orphanBlockIdentifier);
+            const orphanBlockIdentifier = expectedBlockIdentifierLinksMap.get(
+                orphanBlockIdentifierLink
+            );
+            if (orphanBlockIdentifier) {
+                orphanBlockIdentifiers.push(orphanBlockIdentifier);
+            }
         }
 
         console.log("jsNotes", jsNotes);
@@ -293,40 +295,6 @@ function FindOrphanBlockIdentifiers() {
             jsNotes,
             brokenLinks,
             orphanBlockIdentifiers,
-        };
-    }
-
-    async function findOrphanBlockIdentifiers({
-        jsNotes,
-        blockIdentifierReferences,
-        blockIdentifierLinks,
-    }: {
-        jsNotes: Array<JsNote>;
-        blockIdentifierReferences: Set<string>;
-        blockIdentifierLinks: Set<string>;
-    }) {
-        // orphanReferences = blockIdentifierReferences - blockIdentifierLinks
-        const orphanReferences = _.filter(
-            [...blockIdentifierReferences.values()],
-            (x: string) => {
-                return !blockIdentifierLinks.has(x);
-            }
-        );
-
-        // brokenLinks = blockIdentifierLinks - blockIdentifierReferences
-        const brokenLinks = _.filter(
-            [...blockIdentifierLinks.values()],
-            (x: string) => {
-                return !blockIdentifierReferences.has(x);
-            }
-        );
-
-        // console.log("orphanReferences", orphanReferences);
-        // console.log("brokenLinks", brokenLinks);
-
-        return {
-            orphanReferences,
-            brokenLinks,
         };
     }
 
