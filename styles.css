@@ -49,7 +49,7 @@ If your plugin does not need CSS, delete this file.
 }
 
 .fobi-note-matching-result-item {
-    /* color: var(--text-faint); */
+    word-break: break-all;
 }
 
 .fobi-note-matching-result-item a {

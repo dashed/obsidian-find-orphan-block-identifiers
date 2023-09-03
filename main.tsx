@@ -2,8 +2,6 @@ import {
     App,
     Modal,
     Plugin,
-    PluginSettingTab,
-    Setting,
     Vault,
     TFile,
     MetadataCache,
@@ -25,7 +23,11 @@ type BrokenLink = {
     };
     positionStart: number;
     positionEnd: number;
-    needleContext: string;
+    needleContext: {
+        start: string;
+        needle: string;
+        end: string;
+    };
 };
 
 type OrphanBlockIdentifier = {
@@ -60,12 +62,13 @@ export default class AppPlugin extends Plugin {
         }
 
         // This creates an icon in the left ribbon.
-        // TODO: remove?
-        this.addRibbonIcon("dice", "Sample Plugin", (evt: MouseEvent) => {
-            // Called when the user clicks the icon.
-            // new Notice("This is a notice!");
-            openAppModal(this.app);
-        });
+        this.addRibbonIcon(
+            "dice",
+            "Find Orphan Block Identifiers",
+            (evt: MouseEvent) => {
+                openAppModal(this.app);
+            }
+        );
 
         // This adds a status bar item to the bottom of the app. Does not work on mobile apps.
         const statusBarItemEl = this.addStatusBarItem();
@@ -80,7 +83,7 @@ export default class AppPlugin extends Plugin {
         });
 
         // This adds a settings tab so the user can configure various aspects of the plugin
-        this.addSettingTab(new AppSettingTab(this.app, this));
+        // this.addSettingTab(new AppSettingTab(this.app, this));
     }
 
     onunload() {}
@@ -159,6 +162,65 @@ async function getNotesFromVault(
     return await Promise.all(notes);
 }
 
+function BrokenLinksResult({
+    result,
+    onClick,
+}: {
+    result: BrokenLink[];
+    onClick: (x: OrphanBlockIdentifier | BrokenLink) => void;
+}) {
+    if (result.length <= 0) {
+        return null;
+    }
+
+    return (
+        <div>
+            <div style={{ marginBottom: "8px" }}>
+                <strong>Broken Links</strong>
+            </div>
+            <div>
+                <ol>
+                    {result.map((brokenLink, index) => {
+                        return (
+                            <li
+                                className="fobi-note-matching-result-item"
+                                key={`broken-link-${index}-${brokenLink.sourcePath}`}
+                            >
+                                <a
+                                    href="#"
+                                    onClick={(event) => {
+                                        event.preventDefault();
+                                        onClick(brokenLink);
+                                    }}
+                                >
+                                    <code>
+                                        <small>
+                                            {brokenLink.needleContext.start}
+                                        </small>
+                                        <i>
+                                            <small>
+                                                <strong>
+                                                    {
+                                                        brokenLink.needleContext
+                                                            .needle
+                                                    }
+                                                </strong>
+                                            </small>
+                                        </i>
+                                        <small>
+                                            {brokenLink.needleContext.end}
+                                        </small>
+                                    </code>
+                                </a>
+                            </li>
+                        );
+                    })}
+                </ol>
+            </div>
+        </div>
+    );
+}
+
 function OrphanBlockIdentifiersResult({
     result,
     onClick,
@@ -234,11 +296,14 @@ function FindOrphanBlockIdentifiers({
         ProcessingState.Initializing
     );
 
-    const [brokenLinksResult, setBrokenLinks] = useState<Array<BrokenLink>>([]);
-    const [orphanBlockIdentifiersResult, setOrphanBlockIdentifiers] = useState<
-        Array<OrphanBlockIdentifier>
-    >([]);
-    const _fileToResults = new Map<
+    const app = useApp();
+    if (!app) {
+        return null;
+    }
+
+    const { vault, metadataCache, workspace } = app;
+
+    const fileToResults = new Map<
         string,
         {
             orphanBlockIdentifiers: Array<OrphanBlockIdentifier>;
@@ -246,22 +311,6 @@ function FindOrphanBlockIdentifiers({
             sourceNote: JsNote;
         }
     >();
-    const [fileToResults, setFileResults] = useState<
-        Map<
-            string,
-            {
-                orphanBlockIdentifiers: Array<OrphanBlockIdentifier>;
-                brokenLinks: Array<BrokenLink>;
-                sourceNote: JsNote;
-            }
-        >
-    >(_fileToResults);
-    const app = useApp();
-    if (!app) {
-        return null;
-    }
-
-    const { vault, metadataCache, workspace } = app;
 
     async function processNotes(jsNotes: JsNote[]) {
         setProcessingState(ProcessingState.Scanning);
@@ -364,29 +413,39 @@ function FindOrphanBlockIdentifiers({
 
                     const positionStart = (result.index ?? 0) + 1;
                     const positionEnd = positionStart + actualLinkPath.length;
+                    let needleContext = note.content.slice(
+                        positionStart,
+                        positionEnd
+                    );
 
-                    const startNeedleContext = Math.max(
+                    const startNeedleContextPosition = Math.max(
                         positionStart - CONTEXT_SIZE,
                         0
                     );
+                    let startNeedleContext = note.content.slice(
+                        startNeedleContextPosition,
+                        positionStart
+                    );
+                    if (startNeedleContextPosition !== 0) {
+                        startNeedleContext = `...${startNeedleContext}`;
+                    }
 
-                    const endNeedleContext = Math.min(
+                    const endNeedleContextPosition = Math.min(
                         positionEnd + CONTEXT_SIZE,
                         note.content.length
                     );
-
-                    let needleContext = note.content.slice(
-                        startNeedleContext,
-                        endNeedleContext
+                    let endNeedleContext = note.content.slice(
+                        positionEnd,
+                        endNeedleContextPosition
                     );
 
-                    if (startNeedleContext !== 0) {
-                        needleContext = `...${needleContext}`;
+                    if (endNeedleContextPosition < note.content.length) {
+                        endNeedleContext = `${endNeedleContext}...`;
                     }
 
-                    if (endNeedleContext < note.content.length) {
-                        needleContext = `${needleContext}...`;
-                    }
+                    startNeedleContext = startNeedleContext.replace(/\n/g, " ");
+                    needleContext = needleContext.replace(/\n/g, " ");
+                    endNeedleContext = endNeedleContext.replace(/\n/g, " ");
 
                     if (maybeFile) {
                         const fileCache = metadataCache.getFileCache(maybeFile);
@@ -406,7 +465,11 @@ function FindOrphanBlockIdentifiers({
                                     },
                                     positionStart,
                                     positionEnd,
-                                    needleContext,
+                                    needleContext: {
+                                        start: startNeedleContext,
+                                        needle: needleContext,
+                                        end: endNeedleContext,
+                                    },
                                 };
                                 brokenLinks.push(brokenLink);
                             } else {
@@ -448,7 +511,11 @@ function FindOrphanBlockIdentifiers({
                             },
                             positionStart,
                             positionEnd,
-                            needleContext,
+                            needleContext: {
+                                start: startNeedleContext,
+                                needle: needleContext,
+                                end: endNeedleContext,
+                            },
                         };
                         brokenLinks.push(brokenLink);
                     }
@@ -467,9 +534,9 @@ function FindOrphanBlockIdentifiers({
             }
         }
 
-        console.log("jsNotes", jsNotes);
-        console.log("brokenLinks", brokenLinks);
-        console.log("orphanBlockIdentifiers", orphanBlockIdentifiers);
+        // console.log("jsNotes", jsNotes);
+        // console.log("brokenLinks", brokenLinks);
+        // console.log("orphanBlockIdentifiers", orphanBlockIdentifiers);
 
         brokenLinks.forEach((brokenLink) => {
             const filePath = brokenLink.sourceNote.path;
@@ -499,8 +566,6 @@ function FindOrphanBlockIdentifiers({
             }
         });
 
-        setBrokenLinks(brokenLinks);
-        setOrphanBlockIdentifiers(orphanBlockIdentifiers);
         setProcessingState(ProcessingState.Finished);
     }
 
@@ -515,6 +580,49 @@ function FindOrphanBlockIdentifiers({
             .then(processNotes)
             .catch(showError);
     }, [app]);
+
+    function goToContext(result: OrphanBlockIdentifier | BrokenLink) {
+        closeModal();
+
+        const leaf = workspace.getLeaf();
+        leaf.openFile(result.sourceNote.file).then(async () => {
+            if (workspace.activeEditor && workspace.activeEditor.editor) {
+                const { editor } = workspace.activeEditor;
+                const editorPositionStart = editor.offsetToPos(
+                    result.positionStart
+                );
+                const editorPositionEnd = editor.offsetToPos(
+                    result.positionEnd
+                );
+
+                // Go to editing view in source mode.
+                // This makes it easier to select link in their source code form.
+                // Source: https://github.com/bwydoogh/obsidian-force-view-mode-of-note
+                const viewState = leaf.getViewState();
+                await leaf.setViewState({
+                    ...viewState,
+                    state: {
+                        ...viewState.state,
+                        mode: "source",
+                        source: true,
+                    },
+                });
+
+                editor.focus();
+                // editor.setCursor(editorPositionStart);
+                editor.setSelection(editorPositionStart, editorPositionEnd);
+
+                // Revert to the original view state, but stay in editing view.
+                await leaf.setViewState({
+                    ...viewState,
+                    state: {
+                        ...viewState.state,
+                        mode: "source",
+                    },
+                });
+            }
+        });
+    }
 
     if (processingState == ProcessingState.Initializing) {
         return <div>🏗️ Retrieving notes...</div>;
@@ -542,44 +650,24 @@ function FindOrphanBlockIdentifiers({
                             </div>
                             <OrphanBlockIdentifiersResult
                                 result={result.orphanBlockIdentifiers}
-                                onClick={(result) => {
-                                    closeModal();
-
-                                    workspace
-                                        .getLeaf()
-                                        .openFile(result.sourceNote.file)
-                                        .then(() => {
-                                            if (
-                                                workspace.activeEditor &&
-                                                workspace.activeEditor.editor
-                                            ) {
-                                                const { editor } =
-                                                    workspace.activeEditor;
-                                                const editorPositionStart =
-                                                    editor.offsetToPos(
-                                                        result.positionStart
-                                                    );
-                                                const editorPositionEnd =
-                                                    editor.offsetToPos(
-                                                        result.positionEnd
-                                                    );
-
-                                                editor.focus();
-                                                editor.setSelection(
-                                                    editorPositionStart,
-                                                    editorPositionEnd
-                                                );
-                                            }
-                                        });
+                                onClick={(
+                                    result: OrphanBlockIdentifier | BrokenLink
+                                ) => {
+                                    goToContext(result);
                                 }}
                             />
                             {result.orphanBlockIdentifiers.length &&
                             result.brokenLinks.length ? (
                                 <br />
                             ) : null}
-                            <div>
-                                <strong>Broken Links</strong>
-                            </div>
+                            <BrokenLinksResult
+                                result={result.brokenLinks}
+                                onClick={(
+                                    result: OrphanBlockIdentifier | BrokenLink
+                                ) => {
+                                    goToContext(result);
+                                }}
+                            />
                         </div>
                     );
                 })}
@@ -621,33 +709,5 @@ class AppModal extends Modal {
                 </div>
             </AppContext.Provider>
         );
-    }
-}
-
-class AppSettingTab extends PluginSettingTab {
-    plugin: AppPlugin;
-
-    constructor(app: App, plugin: AppPlugin) {
-        super(app, plugin);
-        this.plugin = plugin;
-    }
-
-    display(): void {
-        const { containerEl } = this;
-
-        containerEl.empty();
-
-        new Setting(containerEl)
-            .setName("Setting #1")
-            .setDesc("It's a secret")
-            .addText((text) =>
-                text
-                    .setPlaceholder("Enter your secret")
-                    .setValue(this.plugin.settings.mySetting)
-                    .onChange(async (value) => {
-                        this.plugin.settings.mySetting = value;
-                        await this.plugin.saveSettings();
-                    })
-            );
     }
 }
