@@ -6,3 +6,52 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+
+:root {
+    --super-small-margin: 5px;
+    --small-margin: 10px;
+    --default-margin: 15px;
+    --double-default-margin: 30px;
+
+    --default-padding: 10px;
+    --small-padding: 5px;
+
+    --default-round-borders: 10px;
+    --small-round-borders: 7px;
+
+    --small-font-size: 10px;
+    --enlarged-default-font-size: 15px;
+
+    --warning-background-color: rgb(255, 165, 0, 0.5);
+    --success-background-color: rgb(50, 205, 50, 0.5);
+    --info-background-color: rgb(100, 149, 237, 0.5);
+}
+
+.fobi-note-results {
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    border-radius: var(--default-round-borders);
+    margin-top: var(--default-margin);
+    padding: var(--default-padding);
+}
+
+.fobi-note-matching-result-title {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-top: var(--small-margin);
+    margin-bottom: var(--small-margin);
+}
+
+.fobi-note-matching-result-title small {
+    color: var(--text-muted);
+}
+
+.fobi-note-matching-result-item {
+    /* color: var(--text-faint); */
+}
+
+.fobi-note-matching-result-item a {
+    text-decoration: none;
+}

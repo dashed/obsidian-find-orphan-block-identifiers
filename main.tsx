@@ -17,12 +17,15 @@ import { useContext, useEffect, useState } from "react";
 
 const CONTEXT_SIZE = 20;
 type BrokenLink = {
+    sourceNote: JsNote;
     sourcePath: string;
     link: {
         path: string;
         subpath: string;
     };
-    position: number;
+    positionStart: number;
+    positionEnd: number;
+    needleContext: string;
 };
 
 type OrphanBlockIdentifier = {
@@ -31,7 +34,11 @@ type OrphanBlockIdentifier = {
     blockIdentifier: string;
     positionStart: number;
     positionEnd: number;
-    needleContext: string;
+    needleContext: {
+        start: string;
+        needle: string;
+        end: string;
+    };
 };
 
 interface MyPluginSettings {
@@ -152,10 +159,92 @@ async function getNotesFromVault(
     return await Promise.all(notes);
 }
 
-function FindOrphanBlockIdentifiers() {
+function OrphanBlockIdentifiersResult({
+    result,
+}: {
+    result: OrphanBlockIdentifier[];
+}) {
+    if (result.length <= 0) {
+        return null;
+    }
+
+    return (
+        <div>
+            <div style={{ marginBottom: "8px" }}>
+                <strong>Orphan Block Identifiers</strong>
+            </div>
+            <div>
+                <ol>
+                    {result.map((orphanBlockIdentifier) => {
+                        return (
+                            <li className="fobi-note-matching-result-item">
+                                <a href="#">
+                                    <code>
+                                        <small>
+                                            {
+                                                orphanBlockIdentifier
+                                                    .needleContext.start
+                                            }
+                                        </small>
+                                        <i>
+                                            <small>
+                                                <strong>
+                                                    {
+                                                        orphanBlockIdentifier
+                                                            .needleContext
+                                                            .needle
+                                                    }
+                                                </strong>
+                                            </small>
+                                        </i>
+                                        <small>
+                                            {
+                                                orphanBlockIdentifier
+                                                    .needleContext.end
+                                            }
+                                        </small>
+                                    </code>
+                                </a>
+                            </li>
+                        );
+                    })}
+                </ol>
+            </div>
+        </div>
+    );
+}
+
+function FindOrphanBlockIdentifiers({
+    closeModal,
+}: {
+    closeModal: () => void;
+}) {
     const [processingState, setProcessingState] = useState<ProcessingState>(
         ProcessingState.Initializing
     );
+
+    const [brokenLinksResult, setBrokenLinks] = useState<Array<BrokenLink>>([]);
+    const [orphanBlockIdentifiersResult, setOrphanBlockIdentifiers] = useState<
+        Array<OrphanBlockIdentifier>
+    >([]);
+    const _fileToResults = new Map<
+        string,
+        {
+            orphanBlockIdentifiers: Array<OrphanBlockIdentifier>;
+            brokenLinks: Array<BrokenLink>;
+            sourceNote: JsNote;
+        }
+    >();
+    const [fileToResults, setFileResults] = useState<
+        Map<
+            string,
+            {
+                orphanBlockIdentifiers: Array<OrphanBlockIdentifier>;
+                brokenLinks: Array<BrokenLink>;
+                sourceNote: JsNote;
+            }
+        >
+    >(_fileToResults);
     const app = useApp();
     if (!app) {
         return null;
@@ -163,7 +252,7 @@ function FindOrphanBlockIdentifiers() {
 
     const { vault, metadataCache, workspace } = app;
 
-    async function getBlockIdentifiers(jsNotes: JsNote[]) {
+    async function processNotes(jsNotes: JsNote[]) {
         setProcessingState(ProcessingState.Scanning);
 
         // Get all block identifier references
@@ -185,29 +274,39 @@ function FindOrphanBlockIdentifiers() {
 
                     const positionStart = result.index ?? 0;
                     const positionEnd = positionStart + result[0].length;
-                    const startNeedleContext = Math.max(
+                    let needleContext = note.content.slice(
+                        positionStart,
+                        positionEnd
+                    );
+
+                    const startNeedleContextPosition = Math.max(
                         positionStart - CONTEXT_SIZE,
                         0
                     );
-                    const endNeedleContext = Math.min(
+                    let startNeedleContext = note.content.slice(
+                        startNeedleContextPosition,
+                        positionStart
+                    );
+                    if (startNeedleContextPosition !== 0) {
+                        startNeedleContext = `...${startNeedleContext}`;
+                    }
+
+                    const endNeedleContextPosition = Math.min(
                         positionEnd + CONTEXT_SIZE,
                         note.content.length
                     );
-
-                    let needleContext = note.content.slice(
-                        startNeedleContext,
-                        endNeedleContext
+                    let endNeedleContext = note.content.slice(
+                        positionEnd,
+                        endNeedleContextPosition
                     );
 
-                    if (startNeedleContext !== 0) {
-                        needleContext = `...${needleContext}`;
+                    if (endNeedleContextPosition < note.content.length) {
+                        endNeedleContext = `${endNeedleContext}...`;
                     }
 
-                    if (endNeedleContext < note.content.length) {
-                        needleContext = `${needleContext}...`;
-                    }
-
+                    startNeedleContext = startNeedleContext.replace(/\n/g, " ");
                     needleContext = needleContext.replace(/\n/g, " ");
+                    endNeedleContext = endNeedleContext.replace(/\n/g, " ");
 
                     const orphanBlockIdentifier: OrphanBlockIdentifier = {
                         sourceNote: note,
@@ -215,7 +314,11 @@ function FindOrphanBlockIdentifiers() {
                         blockIdentifier,
                         positionStart,
                         positionEnd,
-                        needleContext,
+                        needleContext: {
+                            start: startNeedleContext,
+                            needle: needleContext,
+                            end: endNeedleContext,
+                        },
                     };
                     expectedBlockIdentifierLinksMap.set(
                         blockSubpath,
@@ -241,13 +344,39 @@ function FindOrphanBlockIdentifiers() {
                 if (result.length == 3) {
                     const pathToFile = result[1];
                     const blockIdentifier = result[2];
-                    const parseLinktextResult = parseLinktext(
-                        `${pathToFile}#^${blockIdentifier}`
-                    );
+                    const actualLinkPath = `${pathToFile}#^${blockIdentifier}`;
+                    const parseLinktextResult = parseLinktext(actualLinkPath);
                     const maybeFile = metadataCache.getFirstLinkpathDest(
                         parseLinktextResult.path,
                         note.path
                     );
+
+                    const positionStart = (result.index ?? 0) + 1;
+                    const positionEnd = positionStart + actualLinkPath.length;
+
+                    const startNeedleContext = Math.max(
+                        positionStart - CONTEXT_SIZE,
+                        0
+                    );
+
+                    const endNeedleContext = Math.min(
+                        positionEnd + CONTEXT_SIZE,
+                        note.content.length
+                    );
+
+                    let needleContext = note.content.slice(
+                        startNeedleContext,
+                        endNeedleContext
+                    );
+
+                    if (startNeedleContext !== 0) {
+                        needleContext = `...${needleContext}`;
+                    }
+
+                    if (endNeedleContext < note.content.length) {
+                        needleContext = `${needleContext}...`;
+                    }
+
                     if (maybeFile) {
                         const fileCache = metadataCache.getFileCache(maybeFile);
                         if (fileCache) {
@@ -257,15 +386,16 @@ function FindOrphanBlockIdentifiers() {
                             );
 
                             if (!subPathResult) {
-                                // TODO: this is a broken link
-
                                 const brokenLink: BrokenLink = {
+                                    sourceNote: note,
                                     sourcePath: note.path,
                                     link: {
                                         path: maybeFile.path,
                                         subpath: parseLinktextResult.subpath,
                                     },
-                                    position: result.index ?? 0,
+                                    positionStart,
+                                    positionEnd,
+                                    needleContext,
                                 };
                                 brokenLinks.push(brokenLink);
                             } else {
@@ -299,12 +429,15 @@ function FindOrphanBlockIdentifiers() {
                         }
                     } else {
                         const brokenLink: BrokenLink = {
+                            sourceNote: note,
                             sourcePath: note.path,
                             link: {
                                 path: parseLinktextResult.path,
                                 subpath: parseLinktextResult.subpath,
                             },
-                            position: result.index ?? 0,
+                            positionStart,
+                            positionEnd,
+                            needleContext,
                         };
                         brokenLinks.push(brokenLink);
                     }
@@ -327,8 +460,36 @@ function FindOrphanBlockIdentifiers() {
         console.log("brokenLinks", brokenLinks);
         console.log("orphanBlockIdentifiers", orphanBlockIdentifiers);
 
-        if (orphanBlockIdentifiers.length > 0) {
-            const foo = orphanBlockIdentifiers[0];
+        brokenLinks.forEach((brokenLink) => {
+            const filePath = brokenLink.sourceNote.path;
+            const result = fileToResults.get(filePath);
+            if (!result) {
+                fileToResults.set(filePath, {
+                    orphanBlockIdentifiers: [],
+                    brokenLinks: [brokenLink],
+                    sourceNote: brokenLink.sourceNote,
+                });
+            } else {
+                result.brokenLinks.push(brokenLink);
+            }
+        });
+
+        orphanBlockIdentifiers.forEach((orphanBlockIdentifier) => {
+            const filePath = orphanBlockIdentifier.sourceNote.path;
+            const result = fileToResults.get(filePath);
+            if (!result) {
+                fileToResults.set(filePath, {
+                    orphanBlockIdentifiers: [orphanBlockIdentifier],
+                    brokenLinks: [],
+                    sourceNote: orphanBlockIdentifier.sourceNote,
+                });
+            } else {
+                result.orphanBlockIdentifiers.push(orphanBlockIdentifier);
+            }
+        });
+
+        if (brokenLinks.length > 0) {
+            const foo = brokenLinks[0];
             console.log("foo", foo);
             workspace
                 .getLeaf()
@@ -338,6 +499,8 @@ function FindOrphanBlockIdentifiers() {
                         workspace.activeEditor &&
                         workspace.activeEditor.editor
                     ) {
+                        // closeModal();
+
                         const { editor } = workspace.activeEditor;
                         const editorPositionStart = editor.offsetToPos(
                             foo.positionStart
@@ -347,7 +510,8 @@ function FindOrphanBlockIdentifiers() {
                         );
                         console.log("foo.position", foo.positionStart);
                         console.log("editorPosition", editorPositionStart);
-                        editor.setCursor(editorPositionStart);
+                        editor.focus();
+                        // editor.setCursor(editorPositionStart);
 
                         editor.setSelection(
                             editorPositionStart,
@@ -360,27 +524,68 @@ function FindOrphanBlockIdentifiers() {
                 });
         }
 
-        return {
-            jsNotes,
-            brokenLinks,
-            orphanBlockIdentifiers,
-        };
+        setBrokenLinks(brokenLinks);
+        setOrphanBlockIdentifiers(orphanBlockIdentifiers);
+        setProcessingState(ProcessingState.Finished);
+
+        // return {
+        //     jsNotes,
+        //     brokenLinks,
+        //     orphanBlockIdentifiers,
+        // };
     }
 
     function showError(error: Error) {
+        setProcessingState(ProcessingState.Error);
         console.error(error);
     }
 
     useEffect(() => {
         // console.log("unresolvedLinks", metadataCache.unresolvedLinks);
         getNotesFromVault(vault, metadataCache)
-            .then(getBlockIdentifiers)
-            // .then(findOrphanBlockIdentifiers)
+            .then(processNotes)
             .catch(showError);
     }, [app]);
 
     if (processingState == ProcessingState.Initializing) {
         return <div>🏗️ Retrieving notes...</div>;
+    } else if (processingState == ProcessingState.Scanning) {
+        return <div>🔭 Scanning notes...</div>;
+    } else if (processingState == ProcessingState.Finished) {
+        return (
+            <div>
+                {[...fileToResults.keys()].map((filePath) => {
+                    const result = fileToResults.get(filePath);
+                    if (!result) {
+                        return null;
+                    }
+                    return (
+                        <div className="fobi-note-results" key={filePath}>
+                            <div className="fobi-note-matching-result-title">
+                                <center>
+                                    <strong>{result?.sourceNote.title}</strong>
+                                </center>
+                                <center>
+                                    <small>
+                                        <i>{filePath}</i>
+                                    </small>
+                                </center>
+                            </div>
+                            <OrphanBlockIdentifiersResult
+                                result={result.orphanBlockIdentifiers}
+                            />
+                            {result.orphanBlockIdentifiers.length &&
+                            result.brokenLinks.length ? (
+                                <br />
+                            ) : null}
+                            <div>
+                                <strong>Broken Links</strong>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        );
     }
 
     return <div>💀 An error occurred while scanning Obsidian notes.</div>;
@@ -399,7 +604,22 @@ class AppModal extends Modal {
 
         this.root.render(
             <AppContext.Provider value={app}>
-                <FindOrphanBlockIdentifiers />
+                <div>
+                    <center>
+                        <strong>Find Orphan Block Identifiers</strong>
+                    </center>
+                    <center>
+                        <small>
+                            Obsidian plugin to find orphaned block references
+                            and broken links.
+                        </small>
+                    </center>
+                    <FindOrphanBlockIdentifiers
+                        closeModal={() => {
+                            this.close();
+                        }}
+                    />
+                </div>
             </AppContext.Provider>
         );
     }
