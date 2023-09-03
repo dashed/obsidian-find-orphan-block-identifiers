@@ -12,7 +12,7 @@ import {
 } from "obsidian";
 import { createRoot, Root } from "react-dom/client";
 import * as React from "react";
-import { useContext, useEffect } from "react";
+import { useContext, useEffect, useState } from "react";
 
 interface MyPluginSettings {
     mySetting: string;
@@ -28,16 +28,17 @@ export default class AppPlugin extends Plugin {
     async onload() {
         await this.loadSettings();
 
+        function openAppModal(app: App) {
+            new AppModal(app).open();
+        }
+
         // This creates an icon in the left ribbon.
         // TODO: remove?
-        const _ribbonIconEl = this.addRibbonIcon(
-            "dice",
-            "Sample Plugin",
-            (evt: MouseEvent) => {
-                // Called when the user clicks the icon.
-                new Notice("This is a notice!");
-            }
-        );
+        this.addRibbonIcon("dice", "Sample Plugin", (evt: MouseEvent) => {
+            // Called when the user clicks the icon.
+            // new Notice("This is a notice!");
+            openAppModal(this.app);
+        });
 
         // This adds a status bar item to the bottom of the app. Does not work on mobile apps.
         const statusBarItemEl = this.addStatusBarItem();
@@ -47,7 +48,7 @@ export default class AppPlugin extends Plugin {
             id: "open-find-find-orphan-block-identifiers-modal",
             name: "Open",
             callback: () => {
-                new AppModal(this.app).open();
+                openAppModal(this.app);
             },
         });
 
@@ -111,6 +112,13 @@ class JsNote {
     }
 }
 
+enum ProcessingState {
+    Initializing,
+    Scanning,
+    Finished,
+    Error,
+}
+
 async function getNotesFromVault(
     vault: Vault,
     cache: MetadataCache
@@ -122,6 +130,9 @@ async function getNotesFromVault(
 }
 
 function FindOrphanBlockIdentifiers() {
+    const [processingState, setProcessingState] = useState<ProcessingState>(
+        ProcessingState.Initializing
+    );
     const app = useApp();
     if (!app) {
         return null;
@@ -129,19 +140,47 @@ function FindOrphanBlockIdentifiers() {
 
     const { vault, metadataCache } = app;
 
+    async function getBlockIdentifiers(jsNotes: JsNote[]) {
+        setProcessingState(ProcessingState.Scanning);
+
+        // Get all block identifier references
+        const blockIdentifierReferences = new Set();
+        jsNotes.map((note: JsNote) => {
+            const re = new RegExp("\\^([a-zA-Z0-9]+)$", "gm");
+            const results = [];
+
+            for (const result of note.content.matchAll(re)) {
+                const [match, capture] = result;
+                blockIdentifierReferences.add(capture);
+            }
+        });
+
+        // Get all links to block identifier references
+
+        console.log("blockIdentifierReferences", blockIdentifierReferences);
+
+        return {
+            jsNotes,
+            blockIdentifierReferences,
+        };
+    }
+
     function showError(error: Error) {
         console.error(error);
     }
 
     useEffect(() => {
-        getNotesFromVault(vault, metadataCache).catch(showError);
-        // JsNote.getNotesFromVault(vault, metadataCache)
-        // 	.then(getLinkFinderResults)
-        // 	.then(showMatchSelection)
-        // 	.catch(showError);
+        getNotesFromVault(vault, metadataCache)
+            .then(getBlockIdentifiers)
+            // .then(findOrphanBlockIdentifiers)
+            .catch(showError);
     }, [app]);
 
-    return <h4>Hello, Albert!</h4>;
+    if (processingState == ProcessingState.Initializing) {
+        return <div>🏗️ Retrieving notes...</div>;
+    }
+
+    return <div>💀 An error occurred while scanning Obsidian notes.</div>;
 }
 
 class AppModal extends Modal {
