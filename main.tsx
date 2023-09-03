@@ -6,8 +6,8 @@ import {
 	PluginSettingTab,
 	Setting,
 } from "obsidian";
-
-// Remember to rename these classes and interfaces!
+import { createRoot, Root } from "react-dom/client";
+import * as React from "react";
 
 interface MyPluginSettings {
 	mySetting: string;
@@ -66,18 +66,22 @@ export default class AppPlugin extends Plugin {
 }
 
 class AppModal extends Modal {
+	private root: Root;
+
 	constructor(app: App) {
 		super(app);
 	}
 
 	onOpen() {
-		const { contentEl } = this;
-		contentEl.setText("Woah!");
-	}
+		const { contentEl, app } = this;
+		this.root = createRoot(contentEl);
+		const AppContext = React.createContext<App>(app);
 
-	onClose() {
-		const { contentEl } = this;
-		contentEl.empty();
+		this.root.render(
+			<AppContext.Provider value={app}>
+				<h4>Hello, Alberto!</h4>
+			</AppContext.Provider>
+		);
 	}
 }
 
