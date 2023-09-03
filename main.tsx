@@ -287,6 +287,15 @@ function OrphanBlockIdentifiersResult({
     );
 }
 
+type FileToResultsType = Map<
+    string,
+    {
+        orphanBlockIdentifiers: Array<OrphanBlockIdentifier>;
+        brokenLinks: Array<BrokenLink>;
+        sourceNote: JsNote;
+    }
+>;
+
 function FindOrphanBlockIdentifiers({
     closeModal,
 }: {
@@ -296,21 +305,16 @@ function FindOrphanBlockIdentifiers({
         ProcessingState.Initializing
     );
 
+    const [fileToResults, setFileToResults] = useState<FileToResultsType>(
+        new Map()
+    );
+
     const app = useApp();
     if (!app) {
         return null;
     }
 
     const { vault, metadataCache, workspace } = app;
-
-    const fileToResults = new Map<
-        string,
-        {
-            orphanBlockIdentifiers: Array<OrphanBlockIdentifier>;
-            brokenLinks: Array<BrokenLink>;
-            sourceNote: JsNote;
-        }
-    >();
 
     async function processNotes(jsNotes: JsNote[]) {
         setProcessingState(ProcessingState.Scanning);
@@ -566,6 +570,7 @@ function FindOrphanBlockIdentifiers({
             }
         });
 
+        setFileToResults(fileToResults);
         setProcessingState(ProcessingState.Finished);
     }
 
@@ -575,7 +580,6 @@ function FindOrphanBlockIdentifiers({
     }
 
     useEffect(() => {
-        // console.log("unresolvedLinks", metadataCache.unresolvedLinks);
         getNotesFromVault(vault, metadataCache)
             .then(processNotes)
             .catch(showError);
