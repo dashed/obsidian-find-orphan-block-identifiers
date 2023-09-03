@@ -1,7 +1,6 @@
 import {
     App,
     Modal,
-    Notice,
     Plugin,
     PluginSettingTab,
     Setting,
@@ -144,24 +143,40 @@ function FindOrphanBlockIdentifiers() {
         setProcessingState(ProcessingState.Scanning);
 
         // Get all block identifier references
-        const blockIdentifierReferences = new Set();
+        const blockIdentifierReferences = new Set<string>();
         jsNotes.map((note: JsNote) => {
-            const re = new RegExp("\\^([a-zA-Z0-9]+)$", "gm");
-            const results = [];
+            const re = new RegExp("\\^([a-zA-Z0-9-]+)$", "gm");
 
             for (const result of note.content.matchAll(re)) {
-                const [match, capture] = result;
-                blockIdentifierReferences.add(capture);
+                if (result.length == 2) {
+                    const capture = result[1];
+                    blockIdentifierReferences.add(capture);
+                }
             }
         });
 
         // Get all links to block identifier references
 
+        const blockIdentifierLinks = new Set<string>();
+        jsNotes.map((note: JsNote) => {
+            const re = new RegExp("#\\^([a-zA-Z0-9-]+)[\\]|)]", "gm");
+
+            for (const result of note.content.matchAll(re)) {
+                if (result.length == 2) {
+                    const capture = result[1];
+                    blockIdentifierLinks.add(capture);
+                }
+            }
+        });
+
         console.log("blockIdentifierReferences", blockIdentifierReferences);
+        console.log("blockIdentifierLinks", blockIdentifierLinks);
+        console.log("jsNotes", jsNotes);
 
         return {
             jsNotes,
             blockIdentifierReferences,
+            blockIdentifierLinks,
         };
     }
 
