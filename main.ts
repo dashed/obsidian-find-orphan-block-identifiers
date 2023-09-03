@@ -17,7 +17,7 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 	mySetting: "default",
 };
 
-export default class OrphanBlockPlugin extends Plugin {
+export default class AppPlugin extends Plugin {
 	settings: MyPluginSettings;
 
 	async onload() {
@@ -82,9 +82,9 @@ class AppModal extends Modal {
 }
 
 class SampleSettingTab extends PluginSettingTab {
-	plugin: OrphanBlockPlugin;
+	plugin: AppPlugin;
 
-	constructor(app: App, plugin: OrphanBlockPlugin) {
+	constructor(app: App, plugin: AppPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
