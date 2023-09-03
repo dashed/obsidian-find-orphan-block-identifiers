@@ -8,11 +8,40 @@ import {
     TFile,
     MetadataCache,
     parseFrontMatterAliases,
+    parseLinktext,
+    resolveSubpath,
 } from "obsidian";
 import { createRoot, Root } from "react-dom/client";
 import * as React from "react";
 import { useContext, useEffect, useState } from "react";
+import _ from "lodash";
 
+type BrokenLink = {
+    sourcePath: string;
+    link: {
+        path: string;
+        subpath: string;
+    };
+};
+
+type OrphanBlockIdentifier = {
+    sourcePath: string;
+    blockIdentifier: string;
+};
+
+function beforeLast(value: string, delimiter: string): string {
+    value = value || "";
+
+    if (delimiter === "") {
+        return value;
+    }
+
+    const substrings = value.split(delimiter);
+
+    return substrings.length === 1
+        ? value // delimiter is not part of the string
+        : substrings.slice(0, -1).join(delimiter);
+}
 interface MyPluginSettings {
     mySetting: string;
 }
@@ -143,40 +172,161 @@ function FindOrphanBlockIdentifiers() {
         setProcessingState(ProcessingState.Scanning);
 
         // Get all block identifier references
-        const blockIdentifierReferences = new Set<string>();
+        const expectedBlockIdentifierLinks = new Set<string>();
+
         jsNotes.map((note: JsNote) => {
             const re = new RegExp("\\^([a-zA-Z0-9-]+)$", "gm");
 
             for (const result of note.content.matchAll(re)) {
                 if (result.length == 2) {
-                    const capture = result[1];
-                    blockIdentifierReferences.add(capture);
+                    const blockIdentifier = result[1];
+
+                    const blockSubpath = `${note.path}#^${blockIdentifier}`;
+                    expectedBlockIdentifierLinks.add(blockSubpath);
                 }
             }
         });
 
         // Get all links to block identifier references
 
-        const blockIdentifierLinks = new Set<string>();
+        const removedExpectedBlockIdentifierLinks = new Set<string>();
+        const brokenLinks: Array<BrokenLink> = [];
+
         jsNotes.map((note: JsNote) => {
-            const re = new RegExp("#\\^([a-zA-Z0-9-]+)[\\]|)]", "gm");
+            // const re = new RegExp("#\\^([a-zA-Z0-9-]+)[\\]|)]", "gm");
+            const re = new RegExp(
+                "[\\[(]([^\\[(]+)#\\^([a-zA-Z0-9-]+)[\\]|)]",
+                "gm"
+            );
 
             for (const result of note.content.matchAll(re)) {
-                if (result.length == 2) {
-                    const capture = result[1];
-                    blockIdentifierLinks.add(capture);
+                if (result.length == 3) {
+                    const pathToFile = result[1];
+                    const blockIdentifier = result[2];
+                    const parseLinktextResult = parseLinktext(
+                        `${pathToFile}#^${blockIdentifier}`
+                    );
+                    const maybeFile = metadataCache.getFirstLinkpathDest(
+                        parseLinktextResult.path,
+                        note.path
+                    );
+                    if (maybeFile) {
+                        const fileCache = metadataCache.getFileCache(maybeFile);
+                        if (fileCache) {
+                            const subPathResult = resolveSubpath(
+                                fileCache,
+                                parseLinktextResult.subpath
+                            );
+
+                            if (!subPathResult) {
+                                // TODO: this is a broken link
+
+                                const brokenLink: BrokenLink = {
+                                    sourcePath: note.path,
+                                    link: {
+                                        path: maybeFile.path,
+                                        subpath: parseLinktextResult.subpath,
+                                    },
+                                };
+                                brokenLinks.push(brokenLink);
+                            } else {
+                                const fullBlockPath = `${maybeFile.path}#^${blockIdentifier}`;
+                                if (
+                                    expectedBlockIdentifierLinks.has(
+                                        fullBlockPath
+                                    )
+                                ) {
+                                    expectedBlockIdentifierLinks.delete(
+                                        fullBlockPath
+                                    );
+                                    removedExpectedBlockIdentifierLinks.add(
+                                        fullBlockPath
+                                    );
+                                } else if (
+                                    !removedExpectedBlockIdentifierLinks.has(
+                                        fullBlockPath
+                                    )
+                                ) {
+                                    // TODO: this is unexpected
+                                    console.log("fullBlockPath", fullBlockPath);
+                                    console.log(
+                                        "fullBlockPath in expectedBlockIdentifierLinks?",
+                                        expectedBlockIdentifierLinks.has(
+                                            fullBlockPath
+                                        )
+                                    );
+                                }
+                            }
+                        }
+                    } else {
+                        const brokenLink: BrokenLink = {
+                            sourcePath: note.path,
+                            link: {
+                                path: parseLinktextResult.path,
+                                subpath: parseLinktextResult.subpath,
+                            },
+                        };
+                        brokenLinks.push(brokenLink);
+                    }
                 }
             }
         });
 
-        console.log("blockIdentifierReferences", blockIdentifierReferences);
-        console.log("blockIdentifierLinks", blockIdentifierLinks);
+        const orphanBlockIdentifiers: Array<OrphanBlockIdentifier> = [];
+
+        for (const orphanBlockIdentifierLink of expectedBlockIdentifierLinks) {
+            const sourcePath = beforeLast(orphanBlockIdentifierLink, "#^");
+            const result = orphanBlockIdentifierLink.split("#^");
+            const blockIdentifier = result[result.length - 1];
+            const orphanBlockIdentifier = {
+                sourcePath,
+                blockIdentifier,
+            };
+            orphanBlockIdentifiers.push(orphanBlockIdentifier);
+        }
+
         console.log("jsNotes", jsNotes);
+        console.log("brokenLinks", brokenLinks);
+        console.log("orphanBlockIdentifiers", orphanBlockIdentifiers);
 
         return {
             jsNotes,
-            blockIdentifierReferences,
-            blockIdentifierLinks,
+            brokenLinks,
+            orphanBlockIdentifiers,
+        };
+    }
+
+    async function findOrphanBlockIdentifiers({
+        jsNotes,
+        blockIdentifierReferences,
+        blockIdentifierLinks,
+    }: {
+        jsNotes: Array<JsNote>;
+        blockIdentifierReferences: Set<string>;
+        blockIdentifierLinks: Set<string>;
+    }) {
+        // orphanReferences = blockIdentifierReferences - blockIdentifierLinks
+        const orphanReferences = _.filter(
+            [...blockIdentifierReferences.values()],
+            (x: string) => {
+                return !blockIdentifierLinks.has(x);
+            }
+        );
+
+        // brokenLinks = blockIdentifierLinks - blockIdentifierReferences
+        const brokenLinks = _.filter(
+            [...blockIdentifierLinks.values()],
+            (x: string) => {
+                return !blockIdentifierReferences.has(x);
+            }
+        );
+
+        // console.log("orphanReferences", orphanReferences);
+        // console.log("brokenLinks", brokenLinks);
+
+        return {
+            orphanReferences,
+            brokenLinks,
         };
     }
 
@@ -185,6 +335,7 @@ function FindOrphanBlockIdentifiers() {
     }
 
     useEffect(() => {
+        // console.log("unresolvedLinks", metadataCache.unresolvedLinks);
         getNotesFromVault(vault, metadataCache)
             .then(getBlockIdentifiers)
             // .then(findOrphanBlockIdentifiers)
