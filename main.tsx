@@ -71,6 +71,16 @@ const useApp = (): App | undefined => {
     return useContext(AppContext);
 };
 
+function FindOrphanBlockIdentifiers() {
+    const app = useApp();
+    if (!app) {
+        return null;
+    }
+
+    const { vault } = app;
+    return <h4>Hello, Albert!</h4>;
+}
+
 class AppModal extends Modal {
     private root: Root;
 
@@ -84,7 +94,7 @@ class AppModal extends Modal {
 
         this.root.render(
             <AppContext.Provider value={app}>
-                <h4>Hello, Alberto!</h4>
+                <FindOrphanBlockIdentifiers />
             </AppContext.Provider>
         );
     }
