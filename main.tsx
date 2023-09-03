@@ -15,6 +15,7 @@ import { createRoot, Root } from "react-dom/client";
 import * as React from "react";
 import { useContext, useEffect, useState } from "react";
 
+const CONTEXT_SIZE = 20;
 type BrokenLink = {
     sourcePath: string;
     link: {
@@ -25,9 +26,12 @@ type BrokenLink = {
 };
 
 type OrphanBlockIdentifier = {
+    sourceNote: JsNote;
     sourcePath: string;
     blockIdentifier: string;
-    position: number;
+    positionStart: number;
+    positionEnd: number;
+    needleContext: string;
 };
 
 interface MyPluginSettings {
@@ -93,17 +97,20 @@ const useApp = (): App | undefined => {
 };
 
 class JsNote {
+    file: TFile;
     title: string;
     path: string;
     content: string;
     aliases: string[];
 
     constructor(
+        file: TFile,
         title: string,
         path: string,
         content: string,
         aliases: string[] = []
     ) {
+        this.file = file;
         this.title = title;
         this.path = path;
         this.content = content;
@@ -122,7 +129,7 @@ class JsNote {
         const aliases = fileCache
             ? parseFrontMatterAliases(fileCache.frontmatter) ?? []
             : [];
-        const jsNote = new JsNote(name, path, content, aliases);
+        const jsNote = new JsNote(file, name, path, content, aliases);
         // console.log("name", name);
         return jsNote;
     }
@@ -154,7 +161,7 @@ function FindOrphanBlockIdentifiers() {
         return null;
     }
 
-    const { vault, metadataCache } = app;
+    const { vault, metadataCache, workspace } = app;
 
     async function getBlockIdentifiers(jsNotes: JsNote[]) {
         setProcessingState(ProcessingState.Scanning);
@@ -176,10 +183,39 @@ function FindOrphanBlockIdentifiers() {
                     const blockSubpath = `${note.path}#^${blockIdentifier}`;
                     expectedBlockIdentifierLinks.add(blockSubpath);
 
+                    const positionStart = result.index ?? 0;
+                    const positionEnd = positionStart + result[0].length;
+                    const startNeedleContext = Math.max(
+                        positionStart - CONTEXT_SIZE,
+                        0
+                    );
+                    const endNeedleContext = Math.min(
+                        positionEnd + CONTEXT_SIZE,
+                        note.content.length
+                    );
+
+                    let needleContext = note.content.slice(
+                        startNeedleContext,
+                        endNeedleContext
+                    );
+
+                    if (startNeedleContext !== 0) {
+                        needleContext = `...${needleContext}`;
+                    }
+
+                    if (endNeedleContext < note.content.length) {
+                        needleContext = `${needleContext}...`;
+                    }
+
+                    needleContext = needleContext.replace(/\n/g, " ");
+
                     const orphanBlockIdentifier: OrphanBlockIdentifier = {
+                        sourceNote: note,
                         sourcePath: note.path,
                         blockIdentifier,
-                        position: result.index ?? 0,
+                        positionStart,
+                        positionEnd,
+                        needleContext,
                     };
                     expectedBlockIdentifierLinksMap.set(
                         blockSubpath,
@@ -290,6 +326,39 @@ function FindOrphanBlockIdentifiers() {
         console.log("jsNotes", jsNotes);
         console.log("brokenLinks", brokenLinks);
         console.log("orphanBlockIdentifiers", orphanBlockIdentifiers);
+
+        if (orphanBlockIdentifiers.length > 0) {
+            const foo = orphanBlockIdentifiers[0];
+            console.log("foo", foo);
+            workspace
+                .getLeaf()
+                .openFile(foo.sourceNote.file)
+                .then(() => {
+                    if (
+                        workspace.activeEditor &&
+                        workspace.activeEditor.editor
+                    ) {
+                        const { editor } = workspace.activeEditor;
+                        const editorPositionStart = editor.offsetToPos(
+                            foo.positionStart
+                        );
+                        const editorPositionEnd = editor.offsetToPos(
+                            foo.positionEnd
+                        );
+                        console.log("foo.position", foo.positionStart);
+                        console.log("editorPosition", editorPositionStart);
+                        editor.setCursor(editorPositionStart);
+
+                        editor.setSelection(
+                            editorPositionStart,
+                            editorPositionEnd
+                        );
+
+                        console.log("getSelection", editor.getSelection());
+                        // editor.replaceSelection("Sample Editor Command");
+                    }
+                });
+        }
 
         return {
             jsNotes,
