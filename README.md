@@ -1,4 +1,4 @@
-# obsidian-find-orphan-block-identifiers
+# Find Orphan Block Identifiers
 
 > Obsidian plugin to find orphaned block references and broken links.
 
