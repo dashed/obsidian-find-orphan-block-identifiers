@@ -42,6 +42,10 @@ This plugin identifies and locates both orphaned block identifiers and broken li
 
 This is taken verbatim from: https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+block+in+a+note
 
+# Credits
+
+-   https://github.com/AlexW00/obsidian-note-linker
+
 # License
 
 MIT.
