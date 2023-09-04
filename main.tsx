@@ -574,7 +574,6 @@ function FindOrphanBlockIdentifiers({
         const brokenLinks: Array<BrokenLink> = [];
 
         jsNotes.map((note: JsNote) => {
-            // const re = new RegExp("#\\^([a-zA-Z0-9-]+)[\\]|)]", "gm");
             const re = new RegExp(
                 "[\\[(]([^\\[(]+)#\\^([a-zA-Z0-9-]+)[\\]|)]",
                 "gm"
@@ -622,7 +621,7 @@ function FindOrphanBlockIdentifiers({
                                 brokenLinks.push(brokenLink);
                             } else {
                                 // subpath was successfully resolved; remove it from expectedBlockIdentifierLinks.
-                                // We prune expectedBlockIdentifierLinks down to list of set of broken links.
+                                // We prune expectedBlockIdentifierLinks down to set of broken links.
                                 const fullBlockPath = `${maybeFile.path}#^${blockIdentifier}`;
                                 if (
                                     expectedBlockIdentifierLinks.has(
