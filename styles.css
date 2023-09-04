@@ -27,6 +27,12 @@ If your plugin does not need CSS, delete this file.
     --info-background-color: rgb(100, 149, 237, 0.5);
 }
 
+.fobi-plugin-container hr {
+    margin: 0;
+    margin-top: var(--default-margin);
+    margin-bottom: var(--default-margin);
+}
+
 .fobi-note-results {
     border: 1px solid var(--background-modifier-border);
     background: var(--background-primary);

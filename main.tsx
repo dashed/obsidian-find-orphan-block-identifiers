@@ -888,7 +888,7 @@ class AppModal extends Modal {
 
         this.root.render(
             <AppContext.Provider value={app}>
-                <div>
+                <div className="fobi-plugin-container">
                     <center>
                         <strong>Find Orphan Block Identifiers</strong>
                     </center>
