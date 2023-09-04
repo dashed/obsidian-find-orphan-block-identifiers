@@ -2,7 +2,7 @@
 
 > Obsidian plugin to find orphaned block references and broken links.
 
-![obsidian-find-orphan-block-identifiers screenshot](./screenshot.png | width=300)
+![obsidian-find-orphan-block-identifiers screenshot](./screenshot.png|width=300px)
 
 ## Gist
 
