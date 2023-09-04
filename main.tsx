@@ -565,7 +565,6 @@ function FindOrphanBlockIdentifiers({
 
         // Get all links to block identifier references
 
-        const removedExpectedBlockIdentifierLinks = new Set<string>();
         const brokenLinks: Array<BrokenLink> = [];
 
         jsNotes.map((note: JsNote) => {
@@ -650,6 +649,8 @@ function FindOrphanBlockIdentifiers({
                                 };
                                 brokenLinks.push(brokenLink);
                             } else {
+                                // subpath was successfully resolved; remove it from expectedBlockIdentifierLinks.
+                                // We prune expectedBlockIdentifierLinks down to list of set of broken links.
                                 const fullBlockPath = `${maybeFile.path}#^${blockIdentifier}`;
                                 if (
                                     expectedBlockIdentifierLinks.has(
@@ -658,22 +659,6 @@ function FindOrphanBlockIdentifiers({
                                 ) {
                                     expectedBlockIdentifierLinks.delete(
                                         fullBlockPath
-                                    );
-                                    removedExpectedBlockIdentifierLinks.add(
-                                        fullBlockPath
-                                    );
-                                } else if (
-                                    !removedExpectedBlockIdentifierLinks.has(
-                                        fullBlockPath
-                                    )
-                                ) {
-                                    // TODO: this is unexpected
-                                    console.log("fullBlockPath", fullBlockPath);
-                                    console.log(
-                                        "fullBlockPath in expectedBlockIdentifierLinks?",
-                                        expectedBlockIdentifierLinks.has(
-                                            fullBlockPath
-                                        )
                                     );
                                 }
                             }
