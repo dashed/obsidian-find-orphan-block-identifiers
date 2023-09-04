@@ -8,6 +8,8 @@ import {
     parseFrontMatterAliases,
     parseLinktext,
     resolveSubpath,
+    CachedMetadata,
+    CacheItem,
 } from "obsidian";
 import { createRoot, Root } from "react-dom/client";
 import * as React from "react";
@@ -106,25 +108,178 @@ const useApp = (): App | undefined => {
     return useContext(AppContext);
 };
 
+class IgnoreRangeBuilder {
+    private readonly _ignoreRanges: IgnoreRange[] = [];
+    private readonly _cache: CachedMetadata;
+    private _content: string;
+    private _name: string;
+
+    constructor(content: string, cache: CachedMetadata, name: string) {
+        this._content = content;
+        this._cache = cache;
+        this._name = name;
+    }
+
+    // adds an ignore range from the cache for an array of cache items
+    private addCacheItem(cacheItem: CacheItem[]) {
+        (cacheItem ? cacheItem : []).forEach((item) => {
+            const ignoreRange = new IgnoreRange(
+                item.position.start.offset,
+                item.position.end.offset
+            );
+            this._ignoreRanges.push(ignoreRange);
+            this._content =
+                this._content.substring(0, ignoreRange.start) +
+                " ".repeat(ignoreRange.end - ignoreRange.start) +
+                this._content.substring(ignoreRange.end);
+        });
+        return this;
+    }
+
+    // adds all headings to the ignore ranges
+    // headings are of the form # Heading
+    public addHeadings(): IgnoreRangeBuilder {
+        if (this._cache.headings) {
+            return this.addCacheItem(this._cache.headings);
+        }
+        return this;
+    }
+
+    // Adds an ignore range from the cache for a specific section type
+    private addCacheSections(type: string): IgnoreRangeBuilder {
+        console.log(this._cache.sections);
+        (this._cache.sections ? this._cache.sections : [])
+            .filter((section) => section.type === type)
+            .forEach((section) => {
+                const ignoreRange = new IgnoreRange(
+                    section.position.start.offset,
+                    section.position.end.offset
+                );
+                this._ignoreRanges.push(ignoreRange);
+
+                this._content =
+                    this._content.substring(0, ignoreRange.start) +
+                    " ".repeat(ignoreRange.end - ignoreRange.start) +
+                    this._content.substring(ignoreRange.end);
+            });
+        return this;
+    }
+
+    // adds code blocks to the ignore ranges
+    // code blocks are of the form ```code```
+    public addCodeSections(): IgnoreRangeBuilder {
+        return this.addCacheSections("code");
+    }
+
+    // utility function to add ignore ranges from a regex
+    private addIgnoreRangesWithRegex(regex: RegExp): IgnoreRangeBuilder {
+        this._content = this._content.replace(regex, (match, ...args) => {
+            const start = args[args.length - 2];
+            const end = start + match.length;
+            this._ignoreRanges.push(new IgnoreRange(start, end));
+            return " ".repeat(match.length);
+        });
+        return this;
+    }
+
+    public addMdMetadata(): IgnoreRangeBuilder {
+        const regex = /---(.|\n)*---/g;
+        return this.addIgnoreRangesWithRegex(regex);
+    }
+
+    // adds all html like text sections to the ignore ranges
+    public addHtml(): IgnoreRangeBuilder {
+        const regex = /<[^>]+>([^>]+<[^>]+>)?/g;
+        return this.addIgnoreRangesWithRegex(regex);
+    }
+
+    public addInlineCode(): IgnoreRangeBuilder {
+        const regex = /`.+`/g;
+        return this.addIgnoreRangesWithRegex(regex);
+    }
+
+    // adds all web links to the ignore ranges
+    public addWebLinks(): IgnoreRangeBuilder {
+        // web links are of the form https://www.example.com or http://www.example.com or www.example.com
+        const regex = /https?:\/\/www\..+|www\..+/g;
+        return this.addIgnoreRangesWithRegex(regex);
+    }
+
+    public build(): IgnoreRange[] {
+        return this._ignoreRanges.sort((a, b) => a.start - b.start);
+    }
+}
+
+class IgnoreRange {
+    start: number;
+    end: number;
+    constructor(start: number, end: number) {
+        this.start = start;
+        this.end = end;
+    }
+
+    static getIgnoreRangesFromCache(
+        content: string,
+        cache: CachedMetadata,
+        name: string
+    ): IgnoreRange[] {
+        const ignoreRanges: IgnoreRange[] = new IgnoreRangeBuilder(
+            content,
+            cache,
+            name
+        )
+            // from cache
+            .addHeadings()
+            .addCodeSections()
+            // from regex
+            .addMdMetadata()
+            .addInlineCode()
+            .addHtml()
+            .addWebLinks()
+            .build();
+
+        return ignoreRanges;
+    }
+}
+
+function whitespaceRange(s, start, end) {
+    const substitute = " ".repeat(end - start);
+    const head = s.substring(0, start);
+    const rest = s.substring(end);
+    return `${head}${substitute}${rest}`;
+}
+
+function sanitizeContent(content: string, ignoreRanges: IgnoreRange[]): string {
+    for (const ignoreRange of ignoreRanges) {
+        content = whitespaceRange(content, ignoreRange.start, ignoreRange.end);
+    }
+    // console.log("content", content);
+    return content;
+}
+
 class JsNote {
     file: TFile;
     title: string;
     path: string;
     content: string;
     aliases: string[];
+    ignore: IgnoreRange[];
 
     constructor(
         file: TFile,
         title: string,
         path: string,
         content: string,
-        aliases: string[] = []
+        aliases: string[] = [],
+        ignore: IgnoreRange[] = []
     ) {
+        // console.log("ignore", ignore);
         this.file = file;
         this.title = title;
         this.path = path;
-        this.content = content;
+        this.content = sanitizeContent(content, ignore);
         this.aliases = aliases;
+        this.ignore = ignore;
     }
 
     static async fromFile(
@@ -139,8 +294,21 @@ class JsNote {
         const aliases = fileCache
             ? parseFrontMatterAliases(fileCache.frontmatter) ?? []
             : [];
-        const jsNote = new JsNote(file, name, path, content, aliases);
-        // console.log("name", name);
+        const ignoreRanges = fileCache
+            ? IgnoreRange.getIgnoreRangesFromCache(
+                  content,
+                  fileCache,
+                  file.name
+              )
+            : [];
+        const jsNote = new JsNote(
+            file,
+            name,
+            path,
+            content,
+            aliases,
+            ignoreRanges
+        );
         return jsNote;
     }
 }
