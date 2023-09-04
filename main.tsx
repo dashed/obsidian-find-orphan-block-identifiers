@@ -147,7 +147,6 @@ class IgnoreRangeBuilder {
 
     // Adds an ignore range from the cache for a specific section type
     private addCacheSections(type: string): IgnoreRangeBuilder {
-        console.log(this._cache.sections);
         (this._cache.sections ? this._cache.sections : [])
             .filter((section) => section.type === type)
             .forEach((section) => {
@@ -253,7 +252,6 @@ function sanitizeContent(content: string, ignoreRanges: IgnoreRange[]): string {
     for (const ignoreRange of ignoreRanges) {
         content = whitespaceRange(content, ignoreRange.start, ignoreRange.end);
     }
-    // console.log("content", content);
     return content;
 }
 
@@ -261,6 +259,7 @@ class JsNote {
     file: TFile;
     title: string;
     path: string;
+    originalContent: string;
     content: string;
     aliases: string[];
     ignore: IgnoreRange[];
@@ -273,10 +272,10 @@ class JsNote {
         aliases: string[] = [],
         ignore: IgnoreRange[] = []
     ) {
-        // console.log("ignore", ignore);
         this.file = file;
         this.title = title;
         this.path = path;
+        this.originalContent = content;
         this.content = sanitizeContent(content, ignore);
         this.aliases = aliases;
         this.ignore = ignore;
@@ -506,7 +505,7 @@ function FindOrphanBlockIdentifiers({
 
                     const positionStart = result.index ?? 0;
                     const positionEnd = positionStart + result[0].length;
-                    let needleContext = note.content.slice(
+                    let needleContext = note.originalContent.slice(
                         positionStart,
                         positionEnd
                     );
@@ -515,7 +514,7 @@ function FindOrphanBlockIdentifiers({
                         positionStart - CONTEXT_SIZE,
                         0
                     );
-                    let startNeedleContext = note.content.slice(
+                    let startNeedleContext = note.originalContent.slice(
                         startNeedleContextPosition,
                         positionStart
                     );
@@ -525,14 +524,16 @@ function FindOrphanBlockIdentifiers({
 
                     const endNeedleContextPosition = Math.min(
                         positionEnd + CONTEXT_SIZE,
-                        note.content.length
+                        note.originalContent.length
                     );
-                    let endNeedleContext = note.content.slice(
+                    let endNeedleContext = note.originalContent.slice(
                         positionEnd,
                         endNeedleContextPosition
                     );
 
-                    if (endNeedleContextPosition < note.content.length) {
+                    if (
+                        endNeedleContextPosition < note.originalContent.length
+                    ) {
                         endNeedleContext = `${endNeedleContext}...`;
                     }
 
@@ -585,7 +586,7 @@ function FindOrphanBlockIdentifiers({
 
                     const positionStart = (result.index ?? 0) + 1;
                     const positionEnd = positionStart + actualLinkPath.length;
-                    let needleContext = note.content.slice(
+                    let needleContext = note.originalContent.slice(
                         positionStart,
                         positionEnd
                     );
@@ -594,7 +595,7 @@ function FindOrphanBlockIdentifiers({
                         positionStart - CONTEXT_SIZE,
                         0
                     );
-                    let startNeedleContext = note.content.slice(
+                    let startNeedleContext = note.originalContent.slice(
                         startNeedleContextPosition,
                         positionStart
                     );
@@ -604,14 +605,16 @@ function FindOrphanBlockIdentifiers({
 
                     const endNeedleContextPosition = Math.min(
                         positionEnd + CONTEXT_SIZE,
-                        note.content.length
+                        note.originalContent.length
                     );
-                    let endNeedleContext = note.content.slice(
+                    let endNeedleContext = note.originalContent.slice(
                         positionEnd,
                         endNeedleContextPosition
                     );
 
-                    if (endNeedleContextPosition < note.content.length) {
+                    if (
+                        endNeedleContextPosition < note.originalContent.length
+                    ) {
                         endNeedleContext = `${endNeedleContext}...`;
                     }
 
@@ -705,10 +708,6 @@ function FindOrphanBlockIdentifiers({
                 orphanBlockIdentifiers.push(orphanBlockIdentifier);
             }
         }
-
-        // console.log("jsNotes", jsNotes);
-        // console.log("brokenLinks", brokenLinks);
-        // console.log("orphanBlockIdentifiers", orphanBlockIdentifiers);
 
         brokenLinks.forEach((brokenLink) => {
             const filePath = brokenLink.sourceNote.path;
