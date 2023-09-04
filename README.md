@@ -8,6 +8,12 @@ As notes are updated over time, block identifiers may be no longer linked and ar
 
 This plugin identifies and locates both orphaned block identifiers and broken links in your notes.
 
+## Usage
+
+Click on ribbon icon with title "Find Orphan Block Identifiers".
+
+Or, you can invoke the command `Find Orphan Block Identifiers: Scan Vault` via the command palette (open it with `cmd + p` or `ctrl + p`).
+
 ## In-depth information
 
 A block is a unit of text in your note, for example a paragraph, block quote, or even a list item.
