@@ -10,6 +10,8 @@ import {
     resolveSubpath,
     CachedMetadata,
     CacheItem,
+    PluginSettingTab,
+    Setting,
 } from "obsidian";
 import { createRoot, Root } from "react-dom/client";
 import * as React from "react";
@@ -45,16 +47,16 @@ type OrphanBlockIdentifier = {
     };
 };
 
-interface MyPluginSettings {
-    mySetting: string;
+interface PluginSettings {
+    showRibbonIcon: boolean;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-    mySetting: "default",
+const DEFAULT_SETTINGS: PluginSettings = {
+    showRibbonIcon: true,
 };
 
 export default class AppPlugin extends Plugin {
-    settings: MyPluginSettings;
+    settings: PluginSettings;
 
     async onload() {
         await this.loadSettings();
@@ -63,14 +65,15 @@ export default class AppPlugin extends Plugin {
             new AppModal(app).open();
         }
 
-        // This creates an icon in the left ribbon.
-        this.addRibbonIcon(
-            "dice",
-            "Find Orphan Block Identifiers",
-            (evt: MouseEvent) => {
-                openAppModal(this.app);
-            }
-        );
+        if (this.settings.showRibbonIcon) {
+            this.addRibbonIcon(
+                "magnifying-glass",
+                "Find Orphan Block Identifiers",
+                (evt: MouseEvent) => {
+                    openAppModal(this.app);
+                }
+            );
+        }
 
         // This adds a status bar item to the bottom of the app. Does not work on mobile apps.
         const statusBarItemEl = this.addStatusBarItem();
@@ -78,14 +81,13 @@ export default class AppPlugin extends Plugin {
 
         this.addCommand({
             id: "open-find-find-orphan-block-identifiers-modal",
-            name: "Open",
+            name: "Scan Vault",
             callback: () => {
                 openAppModal(this.app);
             },
         });
 
-        // This adds a settings tab so the user can configure various aspects of the plugin
-        // this.addSettingTab(new AppSettingTab(this.app, this));
+        this.addSettingTab(new AppPluginSettingTab(this.app, this));
     }
 
     onunload() {}
@@ -906,5 +908,35 @@ class AppModal extends Modal {
                 </div>
             </AppContext.Provider>
         );
+    }
+}
+
+class AppPluginSettingTab extends PluginSettingTab {
+    plugin: AppPlugin;
+
+    constructor(app: App, plugin: AppPlugin) {
+        super(app, plugin);
+        this.plugin = plugin;
+    }
+
+    display(): void {
+        const { containerEl } = this;
+
+        containerEl.empty();
+        new Setting(containerEl)
+            .setName("Show icon in sidebar")
+            .setDesc(
+                "If enabled, a button to scan the vault for orphan block identifiers or broken links will be added to the ribbon sidebar. " +
+                    "It can also be invoked with a Hotkey. Changes only take effect on reload."
+            )
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.plugin.settings.showRibbonIcon)
+                    .onChange((value) => {
+                        this.plugin.settings.showRibbonIcon = value;
+                        this.plugin.saveData(this.plugin.settings);
+                        this.display();
+                    })
+            );
     }
 }
