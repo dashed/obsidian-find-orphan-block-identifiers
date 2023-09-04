@@ -67,7 +67,7 @@ export default class AppPlugin extends Plugin {
 
         if (this.settings.showRibbonIcon) {
             this.addRibbonIcon(
-                "magnifying-glass",
+                "file-scan",
                 "Find Orphan Block Identifiers",
                 (evt: MouseEvent) => {
                     openAppModal(this.app);
