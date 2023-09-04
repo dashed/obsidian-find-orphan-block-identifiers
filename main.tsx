@@ -243,7 +243,7 @@ class IgnoreRange {
     }
 }
 
-function whitespaceRange(s, start, end) {
+function whitespaceRange(s: string, start: number, end: number): string {
     const substitute = " ".repeat(end - start);
     const head = s.substring(0, start);
     const rest = s.substring(end);
