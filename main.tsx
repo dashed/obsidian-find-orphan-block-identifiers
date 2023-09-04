@@ -321,6 +321,46 @@ enum ProcessingState {
     Error,
 }
 
+function generateNeedleContext(
+    content: string,
+    positionStart: number,
+    positionEnd: number
+) {
+    let needleContext = content.slice(positionStart, positionEnd);
+
+    const startNeedleContextPosition = Math.max(
+        positionStart - CONTEXT_SIZE,
+        0
+    );
+    let startNeedleContext = content.slice(
+        startNeedleContextPosition,
+        positionStart
+    );
+    if (startNeedleContextPosition !== 0) {
+        startNeedleContext = `...${startNeedleContext}`;
+    }
+
+    const endNeedleContextPosition = Math.min(
+        positionEnd + CONTEXT_SIZE,
+        content.length
+    );
+    let endNeedleContext = content.slice(positionEnd, endNeedleContextPosition);
+
+    if (endNeedleContextPosition < content.length) {
+        endNeedleContext = `${endNeedleContext}...`;
+    }
+
+    startNeedleContext = startNeedleContext.replace(/\n/g, " ");
+    needleContext = needleContext.replace(/\n/g, " ");
+    endNeedleContext = endNeedleContext.replace(/\n/g, " ");
+
+    return {
+        start: startNeedleContext,
+        needle: needleContext,
+        end: endNeedleContext,
+    };
+}
+
 async function getNotesFromVault(
     vault: Vault,
     cache: MetadataCache
@@ -507,41 +547,11 @@ function FindOrphanBlockIdentifiers({
 
                     const positionStart = result.index ?? 0;
                     const positionEnd = positionStart + result[0].length;
-                    let needleContext = note.originalContent.slice(
+                    const needleContext = generateNeedleContext(
+                        note.originalContent,
                         positionStart,
                         positionEnd
                     );
-
-                    const startNeedleContextPosition = Math.max(
-                        positionStart - CONTEXT_SIZE,
-                        0
-                    );
-                    let startNeedleContext = note.originalContent.slice(
-                        startNeedleContextPosition,
-                        positionStart
-                    );
-                    if (startNeedleContextPosition !== 0) {
-                        startNeedleContext = `...${startNeedleContext}`;
-                    }
-
-                    const endNeedleContextPosition = Math.min(
-                        positionEnd + CONTEXT_SIZE,
-                        note.originalContent.length
-                    );
-                    let endNeedleContext = note.originalContent.slice(
-                        positionEnd,
-                        endNeedleContextPosition
-                    );
-
-                    if (
-                        endNeedleContextPosition < note.originalContent.length
-                    ) {
-                        endNeedleContext = `${endNeedleContext}...`;
-                    }
-
-                    startNeedleContext = startNeedleContext.replace(/\n/g, " ");
-                    needleContext = needleContext.replace(/\n/g, " ");
-                    endNeedleContext = endNeedleContext.replace(/\n/g, " ");
 
                     const orphanBlockIdentifier: OrphanBlockIdentifier = {
                         sourceNote: note,
@@ -549,11 +559,7 @@ function FindOrphanBlockIdentifiers({
                         blockIdentifier,
                         positionStart,
                         positionEnd,
-                        needleContext: {
-                            start: startNeedleContext,
-                            needle: needleContext,
-                            end: endNeedleContext,
-                        },
+                        needleContext,
                     };
                     expectedBlockIdentifierLinksMap.set(
                         blockSubpath,
@@ -587,41 +593,11 @@ function FindOrphanBlockIdentifiers({
 
                     const positionStart = (result.index ?? 0) + 1;
                     const positionEnd = positionStart + actualLinkPath.length;
-                    let needleContext = note.originalContent.slice(
+                    const needleContext = generateNeedleContext(
+                        note.originalContent,
                         positionStart,
                         positionEnd
                     );
-
-                    const startNeedleContextPosition = Math.max(
-                        positionStart - CONTEXT_SIZE,
-                        0
-                    );
-                    let startNeedleContext = note.originalContent.slice(
-                        startNeedleContextPosition,
-                        positionStart
-                    );
-                    if (startNeedleContextPosition !== 0) {
-                        startNeedleContext = `...${startNeedleContext}`;
-                    }
-
-                    const endNeedleContextPosition = Math.min(
-                        positionEnd + CONTEXT_SIZE,
-                        note.originalContent.length
-                    );
-                    let endNeedleContext = note.originalContent.slice(
-                        positionEnd,
-                        endNeedleContextPosition
-                    );
-
-                    if (
-                        endNeedleContextPosition < note.originalContent.length
-                    ) {
-                        endNeedleContext = `${endNeedleContext}...`;
-                    }
-
-                    startNeedleContext = startNeedleContext.replace(/\n/g, " ");
-                    needleContext = needleContext.replace(/\n/g, " ");
-                    endNeedleContext = endNeedleContext.replace(/\n/g, " ");
 
                     if (maybeFile) {
                         const fileCache = metadataCache.getFileCache(maybeFile);
@@ -641,11 +617,7 @@ function FindOrphanBlockIdentifiers({
                                     },
                                     positionStart,
                                     positionEnd,
-                                    needleContext: {
-                                        start: startNeedleContext,
-                                        needle: needleContext,
-                                        end: endNeedleContext,
-                                    },
+                                    needleContext,
                                 };
                                 brokenLinks.push(brokenLink);
                             } else {
@@ -673,11 +645,7 @@ function FindOrphanBlockIdentifiers({
                             },
                             positionStart,
                             positionEnd,
-                            needleContext: {
-                                start: startNeedleContext,
-                                needle: needleContext,
-                                end: endNeedleContext,
-                            },
+                            needleContext,
                         };
                         brokenLinks.push(brokenLink);
                     }
