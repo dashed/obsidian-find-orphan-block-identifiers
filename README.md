@@ -3,7 +3,7 @@
 > Obsidian plugin to find orphaned block references and broken links.
 
 <p align="center">
-<img src="./screenshot.png" width="500" />
+<img src="./screenshot.png" width="600" />
 </p>
 
 ## Gist
