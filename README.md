@@ -2,6 +2,8 @@
 
 > Obsidian plugin to find orphaned block references and broken links.
 
+![obsidian-find-orphan-block-identifiers screenshot](./screenshot.png)
+
 ## Gist
 
 As notes are updated over time, block identifiers may be no longer linked and are orphaned. In addition, there may be broken links that do not point to a block identifier that no longer exists.
