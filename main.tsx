@@ -75,10 +75,6 @@ export default class AppPlugin extends Plugin {
             );
         }
 
-        // This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-        const statusBarItemEl = this.addStatusBarItem();
-        statusBarItemEl.setText("Status Bar Text");
-
         this.addCommand({
             id: "open-find-find-orphan-block-identifiers-modal",
             name: "Scan Vault",
