@@ -168,6 +168,10 @@ class IgnoreRangeBuilder {
         return this.addCacheSections("code");
     }
 
+    public addMathSections(): IgnoreRangeBuilder {
+        return this.addCacheSections("math");
+    }
+
     // utility function to add ignore ranges from a regex
     private addIgnoreRangesWithRegex(regex: RegExp): IgnoreRangeBuilder {
         this._content = this._content.replace(regex, (match, ...args) => {
@@ -228,6 +232,7 @@ class IgnoreRange {
             // from cache
             .addHeadings()
             .addCodeSections()
+            .addMathSections()
             // from regex
             .addMdMetadata()
             .addInlineCode()
