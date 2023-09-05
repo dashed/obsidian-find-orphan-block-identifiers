@@ -1,7 +1,7 @@
 {
     "id": "find-orphan-block-identifiers",
     "name": "Find Orphan Block Identifiers",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "minAppVersion": "0.15.0",
     "description": "Find orphaned block references and broken links.",
     "author": "Alberto Leal",
